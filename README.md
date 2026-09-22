@@ -1,11 +1,24 @@
-<div align="center">
+# Atelier v3.0 — Android Studio IA Personnel
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Atelier est un studio IA personnel natif Android (Kotlin + Jetpack Compose + Firebase) conçu pour le chat conversationnel haute performance, la synthèse multimédia (images et vidéos) et l'exécution de séries batch en tâche de fond.
 
-  <h1>Built with AI Studio</h2>
+---
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 1. Caractéristiques Principales
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+- **Chat Conversationnel Fluide** : Streaming réactif des tokens, arrêt instantané, copies avec feedback haptique et suggestions de variations.
+- **Rendus Médias Inline** : Génération native d'images et de vidéos intégrées au fil de conversation avec lecteur et options d'export.
+- **Production Batch Vidéo Résiliente** : Ordonnancement de 20+ générations continues propulsées par un `ForegroundService` Android résistant aux fermetures d'application ou redémarrages de l'appareil.
+- **Gestionnaire Multi-Clés Agnes** : Chiffrement local matériel AES-256 des clés API et rotation dynamique automatique en cas de quota dépassé ou saturation réseau.
+- **Authentification Sécurisée** : Connexion via Google Sign-In et Android Credential Manager couplée à Firebase Auth et Firestore Cloud Database.
+- **Iconographie 100 % Propriétaire** : Set vectoriel SVG strict `AtelierIcons` exclusif (aucun pack tiers).
+- **Intégration CI/CD** : Script et workflow GitHub Actions (`.github/workflows/build-apk.yml`) pour la compilation automatisée des APKs signés Debug et Release.
 
-</div>
+---
+
+## 2. Architecture Technique
+
+- **Langage & UI** : Kotlin 2.2, Jetpack Compose, Material 3 Dark Luxury Theme (`#0B0C0E`, `#141518`, `#7C5CFF`).
+- **Architecture Applicative** : MVVM (Model-View-ViewModel) + StateFlow réactifs + injection propre.
+- **Persistance** : Room Database (`chat_messages`, `conversations`, `batch_jobs`, `api_keys`, `media_items`) + synchronisation Firestore.
+- **Arrière-plan** : Android `ForegroundService` avec notification de statut interactive et persistance d'état.
