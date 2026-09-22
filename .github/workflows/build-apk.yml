@@ -26,32 +26,45 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Make gradlew executable
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+          else
+            echo "ERROR: gradlew is missing! Please add the Gradle Wrapper to the repository."
+            exit 1
+          fi
+
       - name: Inject Google Services Configuration (Firebase)
         run: |
           if [ -n "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
             echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > app/google-services.json
+            echo "google-services.json injected from BASE64 secret"
           elif [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
             echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+            echo "google-services.json injected from plain secret"
+          else
+            echo "WARNING: No google-services.json secret found. Build may fail if Firebase is required."
           fi
 
       - name: Inject Keystore for Release Signing
         run: |
           if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
             echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+            echo "Keystore injected successfully"
+          else
+            echo "WARNING: KEYSTORE_BASE64 secret not found. Will build Debug APK."
           fi
 
       - name: Inject Environment Secrets
         run: |
-          cat << 'EOF' > .env
+          cat << EOF > .env
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
           KEYSTORE_PATH=${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD=${{ secrets.STORE_PASSWORD }}
           KEY_ALIAS=${{ secrets.KEY_ALIAS || 'upload' }}
           KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}
           EOF
-
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew 2>/dev/null || true
 
       - name: Build Signed Release APK
         env:
@@ -60,18 +73,20 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'upload' }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
-          if [ -f "my-upload-key.jks" ]; then
-            gradle :app:assembleRelease
+          if [ -f "my-upload-key.jks" ] && [ -n "${{ secrets.STORE_PASSWORD }}" ]; then
+            echo "Building signed Release APK..."
+            ./gradlew :app:assembleRelease --stacktrace
           else
-            echo "Keystore not detected, building assembleDebug instead"
-            gradle :app:assembleDebug
+            echo "Keystore or passwords missing → building Debug APK instead"
+            ./gradlew :app:assembleDebug --stacktrace
           fi
 
-      - name: Upload Release APK Artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: atelier-release-apk
+          name: atelier-apk
           path: |
             app/build/outputs/apk/release/*.apk
             app/build/outputs/apk/debug/*.apk
           retention-days: 14
+          if-no-files-found: warn
