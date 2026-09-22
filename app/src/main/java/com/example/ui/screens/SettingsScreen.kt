@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +44,7 @@ fun SettingsScreen(
     var customBaseUrl by remember { mutableStateOf("https://api.agnes.ai/v1") }
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(testStatus) {
         testStatus?.let {
@@ -131,7 +133,11 @@ fun SettingsScreen(
                             AtelierMicroInteractionButton(
                                 onClick = {
                                     viewModel.signInWithGoogle(context) { success, msg ->
-                                        // Feedback géré
+                                        if (!success && msg != null) {
+                                            coroutineScope.launch {
+                                                snackbarHostState.showSnackbar(msg)
+                                            }
+                                        }
                                     }
                                 },
                                 enabled = !authLoading,

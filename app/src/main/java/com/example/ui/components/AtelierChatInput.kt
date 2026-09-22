@@ -27,46 +27,6 @@ import com.example.ui.icons.AtelierIcons
 import com.example.ui.theme.*
 
 @Composable
-fun AtelierMicroInteractionButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    containerColor: Color = AtelierAccent,
-    content: @Composable RowScope.() -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-
-    // Micro-interaction 11.2: Léger scale 0.96-0.98 au press
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1.0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
-        label = "btn_scale"
-    )
-
-    Surface(
-        modifier = modifier
-            .scale(scale)
-            .clip(RoundedCornerShape(12.dp))
-            .clickable(
-                enabled = enabled,
-                interactionSource = interactionSource,
-                indication = ripple(color = Color.White.copy(alpha = 0.2f)),
-                onClick = onClick
-            ),
-        shape = RoundedCornerShape(12.dp),
-        color = if (enabled) containerColor else containerColor.copy(alpha = 0.4f)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center,
-            content = content
-        )
-    }
-}
-
-@Composable
 fun AtelierChatInput(
     text: String,
     onTextChanged: (String) -> Unit,
