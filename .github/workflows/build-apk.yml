@@ -17,14 +17,19 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          packages: |
+            platform-tools
+            platforms;android-36.1
+            build-tools;36.0.0
 
       - name: Make gradlew executable
         run: |
@@ -43,8 +48,35 @@ jobs:
           elif [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
             echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
             echo "google-services.json injected from plain secret"
-          else
-            echo "WARNING: No google-services.json secret found. Build may fail if Firebase is required."
+          elif [ ! -f "app/google-services.json" ]; then
+            echo "Creating minimal placeholder app/google-services.json to prevent build failure"
+            cat << 'EOF' > app/google-services.json
+            {
+              "project_info": {
+                "project_number": "123456789",
+                "project_id": "placeholder-project",
+                "storage_bucket": "placeholder.appspot.com"
+              },
+              "client": [
+                {
+                  "client_info": {
+                    "mobilesdk_app_id": "1:123456789:android:abcdef",
+                    "android_client_info": {
+                      "package_name": "com.aistudio.atelier.vpxqzt"
+                    }
+                  },
+                  "oauth_client": [],
+                  "api_key": [
+                    {
+                      "current_key": "fake_api_key"
+                    }
+                  ],
+                  "services": {}
+                }
+              ],
+              "configuration_version": "1"
+            }
+          EOF
           fi
 
       - name: Inject Keystore for Release Signing

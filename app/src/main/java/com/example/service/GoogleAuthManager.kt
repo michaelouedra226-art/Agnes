@@ -8,6 +8,7 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.firebase.FirebaseApp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
@@ -19,28 +20,48 @@ import java.util.UUID
 
 /**
  * Service gérant l'authentification Google avec Firebase Auth et Android Credential Manager.
- * Conforme aux directives strictes de sécurité et d'exclusivité d'option CredentialManager.
+ * Protection intégrale contre les crashes liés à Firebase non initialisé ou contextes d'émulateur restreints.
  */
 class GoogleAuthManager(private val context: Context) {
-    private val auth: FirebaseAuth = FirebaseAuth.getInstance()
-    private val credentialManager: CredentialManager = CredentialManager.create(context)
+    private val auth: FirebaseAuth? = try {
+        // Vérifie si FirebaseApp est initialisé avant d'appeler FirebaseAuth.getInstance()
+        if (FirebaseApp.getApps(context).isNotEmpty()) {
+            FirebaseAuth.getInstance()
+        } else {
+            FirebaseApp.initializeApp(context)
+            FirebaseAuth.getInstance()
+        }
+    } catch (t: Throwable) {
+        Log.e("GoogleAuthManager", "Firebase Auth non disponible", t)
+        null
+    }
 
-    // Web Client ID provisionné dans Firebase Applet Config
+    private val credentialManager: CredentialManager? = try {
+        CredentialManager.create(context)
+    } catch (t: Throwable) {
+        Log.e("GoogleAuthManager", "CredentialManager non disponible", t)
+        null
+    }
+
     private val serverClientId = "251704935538-cv7l8623phd0benkni0fhvivougmcg1m.apps.googleusercontent.com"
 
-    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth.currentUser)
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(auth?.currentUser)
     val currentUser: StateFlow<FirebaseUser?> = _currentUser
 
     init {
-        auth.addAuthStateListener { firebaseAuth ->
-            _currentUser.value = firebaseAuth.currentUser
+        try {
+            auth?.addAuthStateListener { firebaseAuth ->
+                _currentUser.value = firebaseAuth.currentUser
+            }
+        } catch (t: Throwable) {
+            Log.e("GoogleAuthManager", "Erreur lors de l'enregistrement de l'AuthStateListener", t)
         }
     }
 
-    /**
-     * Lance le flux interactif Google Sign-In via Credential Manager
-     */
     suspend fun signInWithGoogle(activityContext: Context): Result<FirebaseUser> {
+        val fbAuth = auth ?: return Result.failure(IllegalStateException("Firebase Auth n'est pas initialisé."))
+        val cm = credentialManager ?: return Result.failure(IllegalStateException("Credential Manager n'est pas supporté sur cet appareil."))
+
         return try {
             val rawNonce = UUID.randomUUID().toString()
             val md = MessageDigest.getInstance("SHA-256")
@@ -51,12 +72,11 @@ class GoogleAuthManager(private val context: Context) {
                 .setNonce(hashedNonce)
                 .build()
 
-            // Strict exclusivity: exactly ONE option per GetCredentialRequest
             val request = GetCredentialRequest.Builder()
                 .addCredentialOption(signInWithGoogleOption)
                 .build()
 
-            val result = credentialManager.getCredential(
+            val result = cm.getCredential(
                 request = request,
                 context = activityContext
             )
@@ -65,24 +85,24 @@ class GoogleAuthManager(private val context: Context) {
             val googleIdTokenCredential = com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.createFrom(credential.data)
             val authCredential = GoogleAuthProvider.getCredential(googleIdTokenCredential.idToken, null)
 
-            val authResult = auth.signInWithCredential(authCredential).await()
-            val user = authResult.user ?: throw IllegalStateException("Utilisateur Firebase non résolu")
-            _currentUser.value = user
+            val authResult = fbAuth.signInWithCredential(authCredential).await()
+            val user = authResult.user ?: throw IllegalStateException("Utilisateur Firebase introuvable après authentification.")
             Result.success(user)
         } catch (e: GetCredentialCancellationException) {
-            Log.w("GoogleAuthManager", "Connexion Google annulée par l'utilisateur", e)
-            Result.failure(e)
+            Result.failure(Exception("Connexion annulée par l'utilisateur."))
         } catch (e: GetCredentialException) {
-            Log.e("GoogleAuthManager", "Erreur CredentialManager: ${e.message}", e)
-            Result.failure(e)
+            Result.failure(Exception("Erreur Credential Manager : ${e.message}"))
         } catch (e: Exception) {
-            Log.e("GoogleAuthManager", "Échec d'authentification Google/Firebase: ${e.message}", e)
             Result.failure(e)
         }
     }
 
     fun signOut() {
-        auth.signOut()
-        _currentUser.value = null
+        try {
+            auth?.signOut()
+            _currentUser.value = null
+        } catch (t: Throwable) {
+            Log.e("GoogleAuthManager", "Erreur lors de la déconnexion", t)
+        }
     }
 }

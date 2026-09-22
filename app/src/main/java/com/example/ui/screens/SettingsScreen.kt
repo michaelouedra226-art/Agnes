@@ -253,7 +253,10 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             color = AtelierTextPrimary
                         )
-                        Divider(modifier = Modifier.padding(vertical = 10.dp), color = AtelierBorderDark)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = 10.dp),
+                            color = AtelierBorderDark
+                        )
                         Text(
                             text = "Ordonnancement Batch",
                             style = MaterialTheme.typography.labelSmall,

@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.local.AtelierDatabase
@@ -9,19 +10,29 @@ import com.example.data.model.ApiKeyEntity
 import com.example.service.ApiKeyManager
 import com.example.service.GoogleAuthManager
 import com.google.firebase.auth.FirebaseUser
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AtelierDatabase.getDatabase(application)
     private val apiKeyDao = db.apiKeyDao()
     private val keyManager = ApiKeyManager(application)
-    private val authManager = GoogleAuthManager(application)
+    
+    private val authManager: GoogleAuthManager? = try {
+        GoogleAuthManager(application)
+    } catch (e: Throwable) {
+        Log.e("SettingsViewModel", "Failed to initialize GoogleAuthManager", e)
+        null
+    }
 
-    val keys = apiKeyDao.getAllKeys()
-    val currentUser: StateFlow<FirebaseUser?> = authManager.currentUser
+    val keys: Flow<List<ApiKeyEntity>> = apiKeyDao.getAllKeys()
+        .catch { e ->
+            Log.e("SettingsViewModel", "Error collecting keys", e)
+            emit(emptyList())
+        }
+
+    val currentUser: StateFlow<FirebaseUser?> = authManager?.currentUser
+        ?: MutableStateFlow(null)
 
     private val _authLoading = MutableStateFlow(false)
     val authLoading: StateFlow<Boolean> = _authLoading.asStateFlow()
@@ -30,37 +41,64 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val testStatus: StateFlow<String?> = _testStatus.asStateFlow()
 
     fun signInWithGoogle(activityContext: Context, onResult: (Boolean, String?) -> Unit) {
+        val manager = authManager
+        if (manager == null) {
+            onResult(false, "Module Google Sign-In non disponible sur cet environnement.")
+            return
+        }
+
         viewModelScope.launch {
             _authLoading.value = true
-            val result = authManager.signInWithGoogle(activityContext)
-            _authLoading.value = false
-            result.fold(
-                onSuccess = { user -> onResult(true, null) },
-                onFailure = { error -> onResult(false, error.localizedMessage) }
-            )
+            try {
+                val result = manager.signInWithGoogle(activityContext)
+                _authLoading.value = false
+                result.fold(
+                    onSuccess = { user -> onResult(true, null) },
+                    onFailure = { error -> onResult(false, error.localizedMessage ?: "Échec d'authentification") }
+                )
+            } catch (t: Throwable) {
+                _authLoading.value = false
+                onResult(false, t.localizedMessage ?: "Erreur inattendue")
+            }
         }
     }
 
     fun signOut() {
-        authManager.signOut()
+        try {
+            authManager?.signOut()
+        } catch (e: Throwable) {
+            Log.e("SettingsViewModel", "Sign out failed", e)
+        }
     }
 
     fun addKey(label: String, key: String, provider: String, baseUrl: String) {
         viewModelScope.launch {
-            keyManager.addKey(label, key, provider, baseUrl)
+            try {
+                keyManager.addKey(label, key, provider, baseUrl)
+            } catch (e: Throwable) {
+                Log.e("SettingsViewModel", "Add key failed", e)
+            }
         }
     }
 
     fun testKey(key: ApiKeyEntity) {
         viewModelScope.launch {
-            val (valid, message) = keyManager.testKey(key)
-            _testStatus.value = message
+            try {
+                val (valid, message) = keyManager.testKey(key)
+                _testStatus.value = message
+            } catch (e: Throwable) {
+                _testStatus.value = "Erreur: ${e.localizedMessage}"
+            }
         }
     }
 
     fun deleteKey(key: ApiKeyEntity) {
         viewModelScope.launch {
-            apiKeyDao.deleteKey(key)
+            try {
+                apiKeyDao.deleteKey(key)
+            } catch (e: Throwable) {
+                Log.e("SettingsViewModel", "Delete key failed", e)
+            }
         }
     }
 }
